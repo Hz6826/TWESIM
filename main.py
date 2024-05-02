@@ -1,16 +1,102 @@
-# 这是一个示例 Python 脚本。
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+# @Time    : 2024/05/02 20:48:00
+# @Author  : Hz6826
+# @File    : main.py
+# @Software: PyCharm
 
-# 按 Shift+F10 执行或将其替换为您的代码。
-# 按 双击 Shift 在所有地方搜索类、文件、工具窗口、操作和设置。
+import json
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+
+G = 6.67430e-11  # 引力常数
+p = 2  # 引力定律
+dt = 3600 * 24  # 时间步长
+steps = 1000  # 时间步数
+total_time = steps * dt  # 总时间
 
 
-def print_hi(name):
-    # 在下面的代码行中使用断点来调试脚本。
-    print(f'Hi, {name}')  # 按 Ctrl+F8 切换断点。
+# 定义行星类
+class Planet:
+    def __init__(self, planet_name, planet_mass, initial_position=(0, 0), initial_velocity=(0, 0)):
+        self.name = planet_name
+        self.loc = np.array(initial_position)  # 使用NumPy数组来存储位置
+        self.v = np.array(initial_velocity)  # 使用NumPy数组来存储速度
+        self.a = np.array([0, 0])  # 加速度
+        self.force = np.array([0, 0])  # 作用力
+        self.m = planet_mass  # 行星的质量
+        self.trail = []  # 存储轨迹点的列表
+
+    def update_location(self, dt, all_planets):
+        for planet in all_planets:
+            self.force = np.array([0, 0])  # 重置作用力
+            # 排除自身
+            if planet is self:
+                continue
+            # 计算两行星之间的距离
+            r_val = np.linalg.norm(np.array(self.loc) - np.array(planet.loc))
+            # 计算引力
+            self.force += G * self.m * planet.m / r_val ** (p) * (planet.loc - self.loc) / r_val
+
+        # 更新加速度
+        self.a = self.force / self.m
+        # 更新速度
+        self.v += self.a * dt
+        # 更新位置
+        self.loc += self.v * dt
+        # 将当前位置添加到轨迹列表中
+        self.trail.append(self.loc.tolist())
 
 
-# 按装订区域中的绿色按钮以运行脚本。
-if __name__ == '__main__':
-    print_hi('PyCharm')
+# 读取metadata.json文件
+with open('metadata.json', 'r') as f:
+    metadata = json.load(f)
 
-# 访问 https://www.jetbrains.com/help/pycharm/ 获取 PyCharm 帮助
+# 创建行星对象
+planets = []
+for planet_data in metadata['planets']:
+    name = planet_data['name']
+    mass = planet_data['mass']
+    position = planet_data['position']
+    velocity = planet_data['velocity']
+    planet = Planet(name, mass, position, velocity)
+    planets.append(planet)
+
+
+# 开始模拟
+for i in range(steps):
+    for planet in planets:
+        planet.update_location(dt, planets)
+
+
+# 绘制轨迹
+for planet in planets:
+    x = [p[0] for p in planet.trail]
+    y = [p[1] for p in planet.trail]
+    plt.plot(x, y, label=planet.name)
+
+plt.legend()
+plt.show()
+
+# 保存轨迹数据
+df = pd.DataFrame(columns=['x', 'y', 'planet'])
+for i, planet in enumerate(planets):
+    for j, point in enumerate(planet.trail):
+        df.loc[len(df)] = [point[0], point[1], planet.name]
+df.to_csv('trajectory.csv', index=False)
+
+# 保存行星数据
+df = pd.DataFrame(columns=['name', 'x', 'y', 'vx', 'vy'])
+for planet in planets:
+    df.loc[len(df)] = [planet.name, planet.loc[0], planet.loc[1], planet.v[0], planet.v[1]]
+df.to_csv('planets.csv', index=False)
+
+# 保存metadata数据
+metadata['time'] = 1000 * dt
+with open('metadata.json', 'w') as f:
+    json.dump(metadata, f)
+
+print('模拟完成！')
+
+
