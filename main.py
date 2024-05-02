@@ -10,21 +10,15 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 
-G = 6.67430e-11  # 引力常数
-p = 2  # 引力定律
-dt = 3600 * 24  # 时间步长
-steps = 1000  # 时间步数
-total_time = steps * dt  # 总时间
-
 
 # 定义行星类
 class Planet:
-    def __init__(self, planet_name, planet_mass, initial_position=(0, 0), initial_velocity=(0, 0)):
+    def __init__(self, planet_name, planet_mass, initial_position=(0, 0, 0), initial_velocity=(0, 0, 0)):
         self.name = planet_name
         self.loc = np.array(initial_position)  # 使用NumPy数组来存储位置
         self.v = np.array(initial_velocity)  # 使用NumPy数组来存储速度
-        self.a = np.array([0, 0])  # 加速度
-        self.force = np.array([0, 0])  # 作用力
+        self.a = np.array([0, 0, 0])  # 加速度
+        self.force = np.array([0, 0, 0])  # 作用力
         self.m = planet_mass  # 行星的质量
         self.trail = []  # 存储轨迹点的列表
 
@@ -53,6 +47,15 @@ class Planet:
 with open('metadata.json', 'r') as f:
     metadata = json.load(f)
 
+G = 6.67430e-11  # 引力常数
+p = 2  # 引力定律
+dt = 3600 * 24  # 时间步长 (1天)
+steps = 1000  # 时间步数
+total_time = steps * dt  # 总时间
+# 读取初始时间，格式为2022-01-01T00:00:00Z，并转化为Unix时间戳
+initial_time = pd.to_datetime(metadata['initial_time']).timestamp()
+
+
 # 创建行星对象
 planets = []
 for planet_data in metadata['planets']:
@@ -64,6 +67,8 @@ for planet_data in metadata['planets']:
     planets.append(planet)
 
 
+time_array = np.arange(initial_time, initial_time + total_time, dt)
+time_df = pd.DataFrame(time_array, columns=['time'])
 # 开始模拟
 for i in range(steps):
     for planet in planets:
@@ -80,22 +85,10 @@ plt.legend()
 plt.show()
 
 # 保存轨迹数据
-df = pd.DataFrame(columns=['x', 'y', 'planet'])
-for i, planet in enumerate(planets):
-    for j, point in enumerate(planet.trail):
-        df.loc[len(df)] = [point[0], point[1], planet.name]
-df.to_csv('trajectory.csv', index=False)
-
-# 保存行星数据
-df = pd.DataFrame(columns=['name', 'x', 'y', 'vx', 'vy'])
 for planet in planets:
-    df.loc[len(df)] = [planet.name, planet.loc[0], planet.loc[1], planet.v[0], planet.v[1]]
-df.to_csv('planets.csv', index=False)
-
-# 保存metadata数据
-metadata['time'] = 1000 * dt
-with open('metadata.json', 'w') as f:
-    json.dump(metadata, f)
+    df = pd.DataFrame(planet.trail, columns=['x', 'y', 'z'])
+    df_merged = pd.merge(df, time_df, on='key', how='outer') # 合并时间戳
+    df_merged.to_csv(f'{planet.name}_trail.csv', index=False)
 
 print('模拟完成！')
 
